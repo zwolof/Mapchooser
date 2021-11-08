@@ -120,6 +120,31 @@ public int MC_FindMapIndexByFilename(char[] filename) {
     }
     return index;
 }
+public int MC_FindMapIndexByMapId(ArrayList list, int id) {
+    if(list == null) {
+        return -1;
+    }
+    int len = list.Length;
+
+    SMap map;
+    for(int i = 0; i < len; i++) {
+        list.GetArray(i, map, sizeof(SMap));
+
+        if(map.id == id) {
+            return i;
+        }
+    }
+    return -1;
+}
+public int MC_FindMapIdByIndex(ArrayList list, int index) {
+    if(list == null) {
+        return -1;
+    }
+    int len = list.Length;
+
+    SMap map; list.GetArray(index, map, sizeof(SMap));
+    return map.id;
+}
 
 public bool MC_GetMapCleanName(char[] filename, char[] buffer, int maxlen) {
     if(g_alMaps == null) {

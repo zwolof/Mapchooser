@@ -35,20 +35,19 @@
 public int MC_Menu_Nominations_Handler(Menu menu, MenuAction action, int client, int choice) {
     char sItem[128]; menu.GetItem(choice, sItem, sizeof(sItem));
 
-    int index = StringToInt(sItem);
+    int id = StringToInt(sItem);
 
     switch(action) {
         case MenuAction_Select: {
+            int foundArrayIndex = MC_FindMapIndexByMapId(g_alMaps_Random, id);
+
+            if(foundArrayIndex == -1) {
+                return;
+            }
+            SMap map; g_alMaps_Random.GetArray(foundArrayIndex, map, sizeof(SMap));
+            g_iNomination[client] = map.id;
             
-            int lastNomination = g_player[client].nominationIdx;
-            g_player[client].nominationIdx = index;
-
-            SMap map;
-            g_alMaps.GetArray(index, map, sizeof(SMap));
-
-            bool changedNomination = !(g_player[client].nominationIdx == lastNomination);
-            Chat(client, "You %s\x10%s", changedNomination ? "changed your nomination to " : "nominated map ", map.cleanname);
-
+            Chat(client, "You nominated \x10%s", map.cleanname);
             MC_OpenNominationMenu(client, MENU_TIME_FOREVER);
         }
         case MenuAction_End: {

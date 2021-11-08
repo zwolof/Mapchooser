@@ -127,8 +127,13 @@ public Action MC_CommandListener(int client, const char[] command, int argc) {
     GetCmdArgString(sCommandArgs, sizeof(sCommandArgs));
     StripQuotes(sCommandArgs);
 
-    if(IsRTVCommand(sCommandArgs) && g_currentState == EState_PostVote) {
-        Chat(client, "Current State: \x10EState_PostVote");
+    if(!g_bIsRTVAllowed && IsRTVCommand(sCommandArgs)) {
+        Chat(client, "RTV is not allowed yet!");
+        return Plugin_Handled;
+    }
+
+    if(g_player[client].hasRTVd && IsRTVCommand(sCommandArgs)) {
+        Chat(client, "You have already rocked the vote!");
         return Plugin_Handled;
     }
 
@@ -137,52 +142,30 @@ public Action MC_CommandListener(int client, const char[] command, int argc) {
         return Plugin_Handled;
     }
 
-    // if(IsRTVCommand(sCommandArgs)) {
-    //     MC_OpenMapvoteMenuToEveryone();
-    //     return Plugin_Handled;
-    // }
-
-    if(!g_bVoteInProgress) {
-        // Chat(client, "!g_bVoteInProgress");
-
+    if(!g_currentState == EState_Vote) {
         if(IsRTVCommand(sCommandArgs)) {
-            // Chat(client, "!g_bVoteInProgress && IsRTVCommand(sCommandArgs)");
-
-            if(g_player[client].hasVoted) {
-                Chat(client, "You have already voted!");
-                return Plugin_Handled;
-            }
-
-            if(!g_bIsRTVAllowed) {
-                Chat(client, "RTV is not allowed yet!");
-                return Plugin_Handled;
-            }
-
-            float percent = ++g_iRockTheVotes / GetPlayerCount();
-
-            if(g_iRockTheVotes == GetPlayerCount()) {
-                percent = 100.0;
-                g_bVoteInProgress = true;
-                MC_OpenMapvoteMenuToEveryone();
-            }
-            if(percent > 0.6) {
-                g_bVoteInProgress = true;
-            }
-            Chat(client, "\x08You rocked the vote! (\x04%.1f\x08)", percent);
+            RequestFrame(CheckRTVState, GetClientUserId(client));
             return Plugin_Handled;
         }
     }
-    else {
-        if(IsRTVCommand(sCommandArgs)) {
-            int playerCount = GetPlayerCount();
-            if(playerCount > 0) {
-                if((g_iRockTheVotes / playerCount) > MC_MIN_ROCKTHEVOTE_PERCENTAGE) {
-                    g_bVoteInProgress = true;
+}
 
-                    MC_OpenMapvoteMenuToEveryone();
-                }
-            }
-        }
+public void CheckRTVState(any data) {
+    if(g_currentState == EState_Vote) return;
+
+    int client = GetClientOfUserId(data);
+    if(client <= 0) return;
+
+    g_iRockTheVotes += 1;
+    
+    Chat(client, "\x08You rocked the vote! (\x04%d\x08/\x04%d\x08)", g_iRockTheVotes, GetPlayerCount());
+    g_player[client].hasRTVd = true;
+
+    if(g_iRockTheVotes >= GetPlayerCount()) {
+        g_bVoteInProgress = true;
+        g_currentState = EState_Vote;
+
+        MC_OpenMapvoteMenuToEveryone();
     }
 }
 
@@ -207,4 +190,30 @@ public void OnClientPutInServer(int client) {
 public void OnMapStart() {
     g_currentState = EState_MapStart;
     g_hAllowRTVTimer = CreateTimer(30.0, Timer_EnableRTV, _, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+void MC_ShuffleMaps() {
+    if(g_alMaps == null) return;
+
+    g_alMaps_Random = g_alMaps.Clone();
+
+    for(int i = g_alMaps_Random.Length-1; i >= 0; i--) {
+        int k = GetRandomInt(0, i);
+        g_alMaps_Random.SwapAt(k, i);
+
+        // Fix Nominations
+        for(int j = 1; j <= MaxClients; j++) {
+            int temp = g_iNomination[i];
+            g_iLastNomination[i] = temp;
+
+            g_iNomination[i] = g_iNomination[k];
+            g_iNomination[k] = temp;
+        }
+
+        // for(int m = 0; m < g_alMaps_Random.Length; m++) {
+        //     int tempVotes = g_iVoteCount[m];
+        //     g_iVoteCount[m] = g_iVoteCount[k];
+        //     g_iVoteCount[k] = tempVotes;
+        // }
+    }
 }

@@ -1,33 +1,8 @@
 // Maplist
 
 
-void MC_ShuffleMaps() {
-    if(g_alMaps == null) return;
-
-    g_alMaps_Random = g_alMaps.Clone();
-
-    for(int i = g_alMaps_Random.Length-1; i >= 0; i--) {
-        int k = GetRandomInt(0, i);
-        g_alMaps_Random.SwapAt(k, i);
-
-        // Fix Nominations
-        for(int j = 1; j <= MaxClients; j++) {
-            int temp = g_iNomination[i];
-
-            g_iNomination[i] = g_iNomination[k];
-            g_iNomination[k] = temp;
-        }
-
-        // for(int m = 0; m < g_alMaps_Random.Length; m++) {
-        //     int tempVotes = g_iVoteCount[m];
-        //     g_iVoteCount[m] = g_iVoteCount[k];
-        //     g_iVoteCount[k] = tempVotes;
-        // }
-    }
-}
-
 void MC_CreateMaplistMenu() {
-    g_mMenuMaps.SetTitle("Maps");
+    g_mMenuMaps.SetTitle("efrag.eu | Maps\n▬▬▬▬▬▬▬▬▬▬▬");
 
     int len = g_alMaps.Length;
 
@@ -75,7 +50,7 @@ public Action MC_ShowMapvoteResults(int client, int args) {
     Panel panel = new Panel();
     
     char TitleBuffer[2048];
-    FormatEx(TitleBuffer, sizeof(TitleBuffer), "Mapvote Results");
+    FormatEx(TitleBuffer, sizeof(TitleBuffer), "efrag.eu | Mapvote Results\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
 
     ArrayList sortedArray = new ArrayList(sizeof(VoteResult));
 
@@ -126,7 +101,7 @@ public ArrayADTCustomCallback(int index1, int index2, Handle array, Handle hndl)
 
 public Action MC_OpenNominationMenu(int client, int args) {
     Menu menu = new Menu(MC_Menu_Nominations_Handler);
-    menu.SetTitle("Nominate map");
+    menu.SetTitle("efrag.eu | Nominate\n▬▬▬▬▬▬▬▬▬▬▬▬");
 
     int len = g_alMaps.Length;
 
@@ -135,18 +110,23 @@ public Action MC_OpenNominationMenu(int client, int args) {
     }
     else {
         SMap map; char buffer[512];
-        for(int i = 0; i < g_alMaps.Length; i++) {
-            g_alMaps.GetArray(i, map, sizeof(SMap));
-            bool nominated = (g_player[client].nominationIdx == i);
+
+        for(int i = 0; i < g_alMaps_Random.Length; i++) {
+            g_alMaps_Random.GetArray(i, map, sizeof(SMap));
+            // g_iNomination[client] = map.id;
+            
+            bool nominated = (g_iNomination[client] == map.id);
 
             FormatEx(buffer, sizeof(buffer), "%s%s", nominated ? "*" : "", map.cleanname);
 
-            char sIndex[32];
-            IntToString(i, sIndex, sizeof(sIndex));
+            char sId[32];
+            IntToString(map.id, sId, sizeof(sId));
 
-            if(!MC_IsMapRecentlyPlayed(map.filename)) {
-                menu.AddItem(sIndex, buffer, nominated ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
+            if(MC_IsMapRecentlyPlayed(map.filename)) {
+                continue;
             }
+
+            menu.AddItem(sId, buffer, nominated ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT);
         }
     }
     menu.ExitButton = true;
@@ -157,16 +137,19 @@ public Action MC_OpenNominationMenu(int client, int args) {
 
 void MC_ResetVotes() {
     for(int i = 0; i < g_alMaps_Random.Length; i++) {
-        g_iVoteCount[i] = (i % 2 == 0) ? GetRandomInt(1, 2) : 0;
+        g_iVoteCount[i] = 0;
     }
 }
+
+#define MAX_MAPS_IN_VOTE 7
+#define COOLSYMBOL_TO_INDICATE_NOMINATED "> "
 
 void PrepareVote() {
     g_mVoteMenu.RemoveAllItems();
     MC_ShuffleMaps();
     MC_ResetVotes();
 
-    int len = g_alMaps.Length;
+    int len = g_alMaps_Random.Length;
 
     if(len == 0) {
         g_mVoteMenu.AddItem("no_maps_found", "No Maps Available", ITEMDRAW_DISABLED);
@@ -175,34 +158,115 @@ void PrepareVote() {
         SMap map; char buffer[512];
 
         int mapCount = 0;
-        for(int i = 0; i < len; i++) {
+        StringMap smAlreadyAdded = new StringMap();
 
-            char key[32];IntToString(i, key, sizeof(key));
-            g_alMaps_Random.GetArray(i, map, sizeof(SMap));
+        SMap nominatedMap; char sNominatedId[16];
+        char FormattedMenuItem[256];
 
-            if(MC_IsMapNominated(i)) {
-                PrintToChatAll("Is Nominated: \x10", map.cleanname);
+        for(int i = 1; i <= MaxClients; i++) {
+            int mapId = g_iNomination[i];
 
-                // if(!MC_IsMapRecentlyPlayed(map.filename)) {
-                    g_mVoteMenu.AddItem(key, map.cleanname);
-                    mapCount++;
-                // }
+            if(mapId == -1) {
+                continue;
+            }
+
+            PrintToConsoleAll("Nominated: %d", mapId);
+
+            int foundMapIndex = MC_FindMapIndexByMapId(g_alMaps_Random, mapId);
+
+            if(foundMapIndex == -1) {
+                continue;
+            }
+
+            IntToString(foundMapIndex, sNominatedId, sizeof(sNominatedId));
+
+            if(smAlreadyAdded.SetValue(sNominatedId, true, false)) {
+                g_alMaps_Random.GetArray(foundMapIndex, nominatedMap, sizeof(SMap));
+
+                FormatEx(FormattedMenuItem, sizeof(FormattedMenuItem), "* %s", nominatedMap.cleanname);
+                g_mVoteMenu.AddItem(sNominatedId, FormattedMenuItem);
+
+                PrintToChatAll("Added Nominated map \x10%s", nominatedMap.cleanname);
+                mapCount++;
             }
         }
 
-        if(mapCount == 0) {
+        if(mapCount > 0) {
+            if(mapCount == MAX_MAPS_IN_VOTE) {
+                g_mVoteMenu.ExitButton = false;
+                return;
+            }
+
+            SMap randomExtraMap; char sRandomId[16];
+            while(mapCount < MAX_MAPS_IN_VOTE) {
+
+                if(mapCount == MAX_MAPS_IN_VOTE) {
+                    break;
+                }
+
+                int randIdx = GetRandomInt(0, g_alMaps_Random.Length-1);
+                int foundIdRandom = MC_FindMapIdByIndex(g_alMaps_Random, randIdx);
+
+                if(TEST_IsNominated(foundIdRandom)) {
+                    continue;
+                }
+
+                g_alMaps_Random.GetArray(randIdx, randomExtraMap, sizeof(SMap));
+                IntToString(randomExtraMap.id, sRandomId, sizeof(sRandomId));
+
+                if(!smAlreadyAdded.SetValue(sRandomId, true, false)) {
+                    continue;
+                }
+
+                g_mVoteMenu.AddItem(sRandomId, randomExtraMap.cleanname);
+                PrintToConsoleAll("[CMS] Added random map %s", randomExtraMap.cleanname);
+
+                mapCount++;
+            }
+        }
+        else {
             PrintToChatAll("No Maps Nominated, randomizing...");
 
             SMap randomMap;
-            for(int j = 0; j < 6; j++) {
-                g_alMaps_Random.GetArray(j, randomMap, sizeof(SMap));
+            char sId[16], menuKey[16];
 
-                char idx[16]; IntToString(j, idx, sizeof(idx));
-                g_mVoteMenu.AddItem(idx, randomMap.cleanname);
+            while(mapCount < MAX_MAPS_IN_VOTE) {
+                int iRandom = GetRandomInt(0, g_alMaps_Random.Length-1);
+                int foundMapId = MC_FindMapIdByIndex(g_alMaps_Random, iRandom);
+
+                if(TEST_IsNominated(foundMapId)) {
+                    continue;
+                }
+
+                IntToString(foundMapId, sId, sizeof(sId));
+
+                if(!smAlreadyAdded.SetValue(sId, true, false)) {
+                    continue;
+                }
+                IntToString(iRandom, menuKey, sizeof(menuKey));
+                g_mVoteMenu.AddItem(menuKey, randomMap.cleanname);
+
+                mapCount++;
             }
+            // for(int j = 0; j < 6; j++) {
+            //     g_alMaps_Random.GetArray(j, randomMap, sizeof(SMap));
+
+            //     char idx[16]; IntToString(j, idx, sizeof(idx));
+            //     g_mVoteMenu.AddItem(idx, randomMap.cleanname);
+            // }
         }
+        delete smAlreadyAdded;
     }
     g_mVoteMenu.ExitButton = false;
+}
+
+public bool TEST_IsNominated(int mapId) {
+    for(int i = 1; i <= MaxClients; i++) {
+        if(g_iNomination[i] == mapId) {
+            return true;
+        }
+    }
+    return false;
 }
 
 public Action MC_Menu_Mapvote(int client, int args) {

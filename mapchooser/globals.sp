@@ -20,6 +20,7 @@ bool g_bIsVoteDone = false;
 // Ints
 int g_iRockTheVotes = 0;
 int g_iNomination[MAXPLAYERS+1] = {-1, ...};
+int g_iLastNomination[MAXPLAYERS+1] = {-1, ...};
 int g_nextMapIdx = -1;
 
 // StringMaps
@@ -40,7 +41,7 @@ SPlayer g_player[MAXPLAYERS+1];
 // SSpawns g_spawns;
 
 
-int g_iVoteCount[64] = {0, ...};
+int g_iVoteCount[MAXPLAYERS+1] = {0, ...};
 
 // Map Vote State
 enum EState {

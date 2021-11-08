@@ -78,5 +78,6 @@ void SQL_GetMaplist_Callback(Database db, DBResultSet results, const char[] erro
 
             g_alMaps.PushArray(map, sizeof(SMap));
         }
+        MC_ShuffleMaps();
 	}
 }
